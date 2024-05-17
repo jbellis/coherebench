@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.example</groupId>
-    <artifactId>coherepedia-jv</artifactId>
+    <artifactId>coherebench</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
@@ -25,22 +25,48 @@
             <artifactId>arrow-memory-netty</artifactId>
             <version>16.1.0</version>
         </dependency>
-
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
-            <version>2.13.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>2.13.4.1</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.github.jbellis</groupId>
-            <artifactId>jvector</artifactId>
-            <version>3.0.0-beta.9</version>
+            <groupId>com.datastax.oss</groupId>
+            <artifactId>java-driver-core</artifactId>
+            <version>4.17.0</version>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <executable>${java.home}/bin/java</executable>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>buildindex</id>
+                        <configuration>
+                            <arguments>
+                                <argument>--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED</argument>
+                                <argument>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</argument>
+                                <argument>--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED</argument>
+                                <argument>--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</argument>
+                                <argument>--add-opens=jdk.compiler/com.sun.tools.javac=ALL-UNNAMED</argument>
+                                <argument>--add-opens=java.base/java.lang=ALL-UNNAMED</argument>
+                                <argument>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argument>
+                                <argument>--add-opens=java.base/java.io=ALL-UNNAMED</argument>
+                                <argument>--add-opens=java.base/java.util=ALL-UNNAMED</argument>
+                                <argument>--add-modules=jdk.incubator.vector</argument>
+                                <argument>--add-opens=java.base/java.nio=ALL-UNNAMED</argument>
+                                <argument>-Xlog:gc=info:gc.log:time</argument>
+                                <argument>-Xmx36G</argument>
+                                <argument>-classpath</argument>
+                                <classpath />
+                                <argument>io.github.jbellis.BuildIndex</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

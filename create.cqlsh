@@ -1,0 +1,24 @@
+create keyspace coherebench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+CREATE TABLE coherebench.embeddings_table (
+    id text PRIMARY KEY,
+    language text,
+    title text,
+    url text,
+    passage text,
+    embedding vector<float, 1024>
+);
+
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(embedding)
+USING 'StorageAttachedIndex'
+WITH OPTIONS = {'source_model': 'cohere-v3'};
+
+ALTER TABLE coherebench.embeddings_table
+WITH compaction = {
+  'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy',
+  'min_sstable_size_in_mb': 1024,
+  'num_shards': 1,
+  'static_scaling_factors': -8,
+  'max_sstables_to_compact': 4,
+  'log': 'all'
+};
