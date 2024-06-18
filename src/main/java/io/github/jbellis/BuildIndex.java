@@ -19,6 +19,7 @@ import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -40,15 +41,20 @@ public class BuildIndex {
         // motherfucking java devs
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         Logger rootLogger = loggerContext.getLogger("com.datastax.oss.driver");
-        rootLogger.setLevel(Level.DEBUG);
+        rootLogger.setLevel(Level.INFO);
 
         // set up C* session
         var configBuilder = DriverConfigLoader.programmaticBuilder()
+                // timeouts go to 11
                 .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600));
+                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600))
+                // request throttler
+                .withString(DefaultDriverOption.REQUEST_THROTTLER_CLASS, "ConcurrentRequestThrottler")
+                .withInt(DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS, 100)
+                .withInt(DefaultDriverOption.REQUEST_THROTTLER_MAX_QUEUE_SIZE, 10000);
 
         session = CqlSession.builder()
                 .withConfigLoader(configBuilder.build())
