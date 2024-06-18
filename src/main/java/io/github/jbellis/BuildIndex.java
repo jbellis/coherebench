@@ -19,7 +19,6 @@ import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -29,13 +28,16 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 
 public class BuildIndex {
     private static final Config config = new Config();
     private static final int N_SHARDS = 378;
+    private static final int CONCURRENT_REQUESTS = 100;
     private static CqlSession session;
+    private static Semaphore semaphore;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         config.validateDatasetPath();
 
         // motherfucking java devs
@@ -50,11 +52,9 @@ public class BuildIndex {
                 .withDuration(DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600))
-                // request throttler
-                .withString(DefaultDriverOption.REQUEST_THROTTLER_CLASS, "com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimitingRequestThrottler")
-                .withInt(DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS, 100)
-                .withInt(DefaultDriverOption.REQUEST_THROTTLER_MAX_QUEUE_SIZE, 10000);
+                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600));
+        // no way to do this in the driver, apparently
+        semaphore = new Semaphore(CONCURRENT_REQUESTS);
 
         session = CqlSession.builder()
                 .withConfigLoader(configBuilder.build())
@@ -66,7 +66,7 @@ public class BuildIndex {
     }
 
 
-    private static void benchmark() throws IOException {
+    private static void benchmark() throws IOException, InterruptedException {
         var insertCql = "INSERT INTO embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?)";
         var insertStmt = session.prepare(insertCql);
         var simpleAnnCql = "SELECT id, title, url, passage FROM embeddings_table ORDER BY embedding ANN OF ? LIMIT 10";
@@ -90,24 +90,23 @@ public class BuildIndex {
                 var unrestrictiveQueryLatencies = new ArrayList<Long>();
 
                 // Insert rows
-                var insertFutures = ConcurrentHashMap.<CompletionStage<?>>newKeySet();
                 for (int i = 0; i < batchSize; i++) {
                     var rowData = iterator.next();
                     var bound = insertStmt.bind(rowData._id(), "en", rowData.title(), rowData.url(), rowData.text(), rowData.embedding());
                     long start = System.nanoTime();
+                    semaphore.acquire();
                     var asyncResult = session.executeAsync(bound);
-                    insertFutures.add(asyncResult);
                     asyncResult.whenComplete((rs, th) -> {
                         long latency = System.nanoTime() - start;
                         insertLatencies.add(latency);
                         if (th != null) {
                             log("Failed to insert row %s: %s", rowData._id(), th);
                         }
-                        insertFutures.remove(asyncResult);
+                        semaphore.release();
                     });
                 }
                 log("Waiting for inserts to complete");
-                while (!insertFutures.isEmpty()) {
+                while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
                     Thread.onSpinWait();
                 }
                 totalRowsInserted += batchSize;
@@ -128,24 +127,23 @@ public class BuildIndex {
         }
     }
 
-    private static void executeQueriesAndCollectStats(PreparedStatement stmt, RowIterator iterator, List<Long> latencies) {
-        var futures = ConcurrentHashMap.<CompletionStage<?>>newKeySet();
+    private static void executeQueriesAndCollectStats(PreparedStatement stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
             var bound = stmt.bind((Object) rowData.embedding());
             long start = System.nanoTime();
+            semaphore.acquire();
             var asyncResult = session.executeAsync(bound);
-            futures.add(asyncResult);
             asyncResult.whenComplete((rs, th) -> {
                 long latency = System.nanoTime() - start;
                 latencies.add(latency);
                 if (th != null) {
                     log("Failed to query row %s: %s", rowData._id(), th);
                 }
-                futures.remove(asyncResult);
+                semaphore.release();
             });
         }
-        while (!futures.isEmpty()) {
+        while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
             Thread.onSpinWait();
         }
     }
