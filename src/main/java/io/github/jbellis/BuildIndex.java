@@ -41,9 +41,11 @@ public class BuildIndex {
         config.validateDatasetPath();
 
         // motherfucking java devs
-        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-        Logger rootLogger = loggerContext.getLogger("com.datastax.oss.driver");
-        rootLogger.setLevel(Level.INFO);
+        var loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        var driverLogger = loggerContext.getLogger("com.datastax.oss.driver");
+        driverLogger.setLevel(Level.INFO);
+        var arrowLogger = loggerContext.getLogger("org.apache.arrow");
+        arrowLogger.setLevel(Level.INFO);
 
         // set up C* session
         var configBuilder = DriverConfigLoader.programmaticBuilder()
