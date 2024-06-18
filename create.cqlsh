@@ -13,6 +13,9 @@ CREATE CUSTOM INDEX ON coherebench.embeddings_table(embedding)
 USING 'StorageAttachedIndex'
 WITH OPTIONS = {'source_model': 'cohere-v3'};
 
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(language)
+USING 'StorageAttachedIndex';
+
 ALTER TABLE coherebench.embeddings_table
 WITH compaction = {
   'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy',
