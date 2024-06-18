@@ -50,18 +50,19 @@ public class BuildIndex {
         var unrestrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'en' ORDER BY embedding ANN OF ? LIMIT 10";
         var unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
 
-        // Stats collectors
-        var insertLatencies = new ArrayList<Long>();
-        var simpleQueryLatencies = new ArrayList<Long>();
-        var restrictiveQueryLatencies = new ArrayList<Long>();
-        var unrestrictiveQueryLatencies = new ArrayList<Long>();
-
         int totalRowsInserted = 0;
         try (RowIterator iterator = new RowIterator(0, N_SHARDS)) {
 //            int batchSize = 1 << 17; // 128k
             int batchSize = 1 << 10;
 
             while (totalRowsInserted < 10_000_000) {
+                log("Batch size %d", batchSize)
+                // Stats collectors
+                var insertLatencies = new ArrayList<Long>();
+                var simpleQueryLatencies = new ArrayList<Long>();
+                var restrictiveQueryLatencies = new ArrayList<Long>();
+                var unrestrictiveQueryLatencies = new ArrayList<Long>();
+
                 // Insert rows
                 var insertFutures = ConcurrentHashMap.<CompletionStage<?>>newKeySet();
                 for (int i = 0; i < batchSize; i++) {
@@ -90,13 +91,13 @@ public class BuildIndex {
                 executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
                 executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
                 executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
-            }
 
-            // Print the stats
-            printStats("Insert", insertLatencies);
-            printStats("Simple Query", simpleQueryLatencies);
-            printStats("Restrictive Query", restrictiveQueryLatencies);
-            printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
+                // Print the stats
+                printStats("Insert", insertLatencies);
+                printStats("Simple Query", simpleQueryLatencies);
+                printStats("Restrictive Query", restrictiveQueryLatencies);
+                printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
+            }
         }
     }
 
