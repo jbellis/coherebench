@@ -31,7 +31,6 @@ public class BuildIndex {
         // set up C* session
         config.validateDatasetPath();
         session = CqlSession.builder()
-                .addContactPoint(config.getCassandraHost())
                 .withKeyspace(CqlIdentifier.fromCql("coherebench"))
                 .build();
         log("Connected to Cassandra.");
