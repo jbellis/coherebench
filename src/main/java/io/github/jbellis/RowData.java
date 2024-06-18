@@ -1,3 +1,5 @@
 package io.github.jbellis;
 
-record RowData(String _id, String url, String title, String text, float[] embedding) {}
+import java.util.List;
+
+record RowData(String _id, String url, String title, String text, List<Float> embedding) {}

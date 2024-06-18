@@ -15,6 +15,7 @@ import java.io.UncheckedIOException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -210,7 +211,7 @@ public class BuildIndex {
             String title = root.getVector("title").getObject(rowIndex).toString();
             String passage = root.getVector("text").getObject(rowIndex).toString();
             var jsonList = (JsonStringArrayList<?>) root.getVector("emb").getObject(rowIndex);
-            float[] embedding = convertToFloatArray(jsonList);
+            var embedding = convertToVector(jsonList);
             return new RowData(id, url, title, passage, embedding);
         }
 
@@ -222,12 +223,12 @@ public class BuildIndex {
         }
     }
 
-    private static float[] convertToFloatArray(JsonStringArrayList<?> jsonList) {
-        float[] floatArray = new float[jsonList.size()];
+    private static List<Float> convertToVector(JsonStringArrayList<?> jsonList) {
+        var floatArray = new Float[jsonList.size()];
         for (int i = 0; i < jsonList.size(); i++) {
             floatArray[i] = Float.parseFloat(jsonList.get(i).toString());
         }
-        return floatArray;
+        return Arrays.asList(floatArray);
     }
 
     private static void log(String message, Object... args) {
