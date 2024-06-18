@@ -1,7 +1,10 @@
 package io.github.jbellis;
 
-import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlIdentifier;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.config.ProgrammaticDriverConfigLoaderBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.data.CqlVector;
 import org.apache.arrow.memory.RootAllocator;
@@ -31,7 +34,14 @@ public class BuildIndex {
     public static void main(String[] args) throws IOException {
         // set up C* session
         config.validateDatasetPath();
+
+        var configBuilder = DriverConfigLoader.programmaticBuilder()
+                .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
+                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600))
+                .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600));
+
         session = CqlSession.builder()
+                .withConfigLoader(configBuilder.build())
                 .withKeyspace(CqlIdentifier.fromCql("coherebench"))
                 .build();
         log("Connected to Cassandra.");
