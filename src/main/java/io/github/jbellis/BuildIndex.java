@@ -56,7 +56,7 @@ public class BuildIndex {
             int batchSize = 1 << 10;
 
             while (totalRowsInserted < 10_000_000) {
-                log("Batch size %d", batchSize)
+                log("Batch size %d", batchSize);
                 // Stats collectors
                 var insertLatencies = new ArrayList<Long>();
                 var simpleQueryLatencies = new ArrayList<Long>();
