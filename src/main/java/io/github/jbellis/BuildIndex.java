@@ -1,8 +1,5 @@
 package io.github.jbellis;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
 import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
@@ -13,7 +10,6 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowStreamReader;
 import org.apache.arrow.vector.util.JsonStringArrayList;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.FileInputStream;
@@ -26,8 +22,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class BuildIndex {
@@ -39,11 +33,6 @@ public class BuildIndex {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         config.validateDatasetPath();
-
-        // motherfucking java devs
-        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-        Logger rootLogger = loggerContext.getLogger("com.datastax.oss.driver");
-        rootLogger.setLevel(Level.INFO);
 
         // set up C* session
         var configBuilder = DriverConfigLoader.programmaticBuilder()
