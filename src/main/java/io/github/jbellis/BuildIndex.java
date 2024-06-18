@@ -1,16 +1,19 @@
 package io.github.jbellis;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
-import com.datastax.oss.driver.api.core.config.ProgrammaticDriverConfigLoaderBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.data.CqlVector;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowStreamReader;
 import org.apache.arrow.vector.util.JsonStringArrayList;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.FileInputStream;
@@ -32,9 +35,14 @@ public class BuildIndex {
     private static CqlSession session;
 
     public static void main(String[] args) throws IOException {
-        // set up C* session
         config.validateDatasetPath();
 
+        // motherfucking java devs
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger rootLogger = loggerContext.getLogger("com.datastax.oss.driver");
+        rootLogger.setLevel(Level.DEBUG);
+
+        // set up C* session
         var configBuilder = DriverConfigLoader.programmaticBuilder()
                 .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT, java.time.Duration.ofSeconds(600))

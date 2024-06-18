@@ -30,6 +30,11 @@
             <artifactId>java-driver-core</artifactId>
             <version>4.17.0</version>
         </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.6</version>
+        </dependency>
     </dependencies>
 
     <build>
