@@ -42,10 +42,8 @@ public class BuildIndex {
 
         // motherfucking java devs
         var loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-        var driverLogger = loggerContext.getLogger("com.datastax.oss.driver");
-        driverLogger.setLevel(Level.INFO);
-        var arrowLogger = loggerContext.getLogger("org.apache.arrow");
-        arrowLogger.setLevel(Level.INFO);
+        var rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        rootLogger.setLevel(Level.INFO);
 
         // set up C* session
         var configBuilder = DriverConfigLoader.programmaticBuilder()
