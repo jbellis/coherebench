@@ -85,6 +85,7 @@ public class BuildIndex {
                     Thread.onSpinWait();
                 }
                 totalRowsInserted += batchSize;
+                batchSize = totalRowsInserted; // double every time
 
                 // Perform queries
                 log("Performing queries");
@@ -135,15 +136,15 @@ public class BuildIndex {
         double averageLatency = (sum / (double) latencies.size()) / 1_000_000;
 
         Collections.sort(latencies);
-        long p50 = latencies.get((int) (latencies.size() * 0.50)) / 1_000_000;
-        long p90 = latencies.get((int) (latencies.size() * 0.90)) / 1_000_000;
-        long p99 = latencies.get((int) (latencies.size() * 0.99)) / 1_000_000;
+        double p50 = latencies.get((int) (latencies.size() * 0.50)) / 1_000_000.0;
+        double p90 = latencies.get((int) (latencies.size() * 0.90)) / 1_000_000.0;
+        double p99 = latencies.get((int) (latencies.size() * 0.99)) / 1_000_000.0;
 
         System.out.println(operationType + " Statistics:");
-        System.out.println("    Average latency (ms): " + averageLatency);
-        System.out.println("    50th percentile latency (ms): " + p50);
-        System.out.println("    90th percentile latency (ms): " + p90);
-        System.out.println("    99th percentile latency (ms): " + p99);
+        System.out.printf("    Average latency (ms): %.2f%n", averageLatency);
+        System.out.printf("    50th percentile latency (ms): %.2f%n", p50);
+        System.out.printf("    90th percentile latency (ms): %.2f%n", p90);
+        System.out.printf("    99th percentile latency (ms): %.2f%n", p99);
     }
 
     private static class RowIterator implements Iterator<RowData>, Closeable {
