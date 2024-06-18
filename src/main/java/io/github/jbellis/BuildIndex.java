@@ -3,6 +3,7 @@ package io.github.jbellis;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.data.CqlVector;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowStreamReader;
@@ -15,7 +16,6 @@ import java.io.UncheckedIOException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -223,12 +223,12 @@ public class BuildIndex {
         }
     }
 
-    private static List<Float> convertToVector(JsonStringArrayList<?> jsonList) {
+    private static CqlVector<Float> convertToVector(JsonStringArrayList<?> jsonList) {
         var floatArray = new Float[jsonList.size()];
         for (int i = 0; i < jsonList.size(); i++) {
             floatArray[i] = Float.parseFloat(jsonList.get(i).toString());
         }
-        return Arrays.asList(floatArray);
+        return CqlVector.newInstance(floatArray);
     }
 
     private static void log(String message, Object... args) {
