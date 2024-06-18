@@ -79,12 +79,14 @@ public class BuildIndex {
                         insertFutures.remove(asyncResult);
                     });
                 }
+                log("Waiting for inserts to complete");
                 while (!insertFutures.isEmpty()) {
                     Thread.onSpinWait();
                 }
                 totalRowsInserted += batchSize;
 
                 // Perform queries
+                log("Performing queries");
                 executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
                 executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
                 executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
