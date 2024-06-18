@@ -22,7 +22,7 @@ public class Config {
             throw new UncheckedIOException("Failed to load configuration properties.", e);
         }
         paths.put("en", Path.of(props.getProperty("dataset_location")).resolve("Cohere___wikipedia-2023-11-embed-multilingual-v3/en/0.0.0/37feace541fadccf70579e9f289c3cf8e8b186d7/wikipedia-2023-11-embed-multilingual-v3-train-%s-of-00378.arrow"));
-        cassandraHost = props.getProperty("CassandraHost");
+        cassandraHost = props.getProperty("cassandra_host");
     }
 
     public void validateDatasetPath() {
