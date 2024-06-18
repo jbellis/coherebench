@@ -52,7 +52,7 @@ public class BuildIndex {
                 .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600))
                 // request throttler
-                .withString(DefaultDriverOption.REQUEST_THROTTLER_CLASS, "ConcurrentRequestThrottler")
+                .withString(DefaultDriverOption.REQUEST_THROTTLER_CLASS, "com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimitingRequestThrottler")
                 .withInt(DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS, 100)
                 .withInt(DefaultDriverOption.REQUEST_THROTTLER_MAX_QUEUE_SIZE, 10000);
 
