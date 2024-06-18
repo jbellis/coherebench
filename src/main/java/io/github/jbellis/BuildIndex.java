@@ -1,7 +1,6 @@
 package io.github.jbellis;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -26,9 +25,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class BuildIndex {
     private static final Config config = new Config();
@@ -92,7 +90,8 @@ public class BuildIndex {
                 // Insert rows
                 for (int i = 0; i < batchSize; i++) {
                     var rowData = iterator.next();
-                    var bound = insertStmt.bind(rowData._id(), "en", rowData.title(), rowData.url(), rowData.text(), rowData.embedding());
+                    var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
+                    var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), rowData.embedding());
                     long start = System.nanoTime();
                     semaphore.acquire();
                     var asyncResult = session.executeAsync(bound);
