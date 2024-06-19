@@ -21,7 +21,7 @@ public class PgFlavor {
     // ThreadLocal for PreparedStatements
     private static final ThreadLocal<PreparedStatement> insertStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("INSERT INTO embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?::vector)");
+            return connection.prepareStatement("INSERT INTO coherebench.embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?::vector)");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -29,7 +29,7 @@ public class PgFlavor {
 
     private static final ThreadLocal<PreparedStatement> simpleAnnStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("SELECT id, title, url, passage FROM embeddings_table ORDER BY embedding <#> ?::vector LIMIT 10");
+            return connection.prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table ORDER BY embedding <#> ?::vector LIMIT 10");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -37,7 +37,7 @@ public class PgFlavor {
 
     private static final ThreadLocal<PreparedStatement> restrictiveAnnStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("SELECT id, title, url, passage FROM embeddings_table WHERE language = 'sq' ORDER BY embedding <#> ?::vector LIMIT 10");
+            return connection.prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table WHERE language = 'sq' ORDER BY embedding <#> ?::vector LIMIT 10");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -45,7 +45,7 @@ public class PgFlavor {
 
     private static final ThreadLocal<PreparedStatement> unrestrictiveAnnStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("SELECT id, title, url, passage FROM embeddings_table WHERE language = 'en' ORDER BY embedding <#> ?::vector LIMIT 10");
+            return connection.prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table WHERE language = 'en' ORDER BY embedding <#> ?::vector LIMIT 10");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
