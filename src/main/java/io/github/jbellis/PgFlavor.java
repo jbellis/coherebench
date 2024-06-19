@@ -4,10 +4,16 @@ import com.pgvector.PGvector;
 import io.github.jbellis.BuildIndex.RowIterator;
 
 import java.io.IOException;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 import static io.github.jbellis.BuildIndex.convertToArray;
 import static io.github.jbellis.BuildIndex.log;
@@ -16,12 +22,22 @@ import static io.github.jbellis.BuildIndex.printStats;
 public class PgFlavor {
     private static final int CONCURRENT_REQUESTS = 100;
     private static ExecutorService executorService;
-    private static Connection connection;
+
+    // ThreadLocal for Connections
+    private static final ThreadLocal<Connection> connection = ThreadLocal.withInitial(() -> {
+        try {
+            Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/coherebench", "postgres", "postgres");
+            PGvector.addVectorType(conn);
+            return conn;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    });
 
     // ThreadLocal for PreparedStatements
     private static final ThreadLocal<PreparedStatement> insertStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("INSERT INTO coherebench.embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?::vector)");
+            return connection.get().prepareStatement("INSERT INTO coherebench.embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?::vector)");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -29,7 +45,7 @@ public class PgFlavor {
 
     private static final ThreadLocal<PreparedStatement> simpleAnnStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table ORDER BY embedding <#> ?::vector LIMIT 10");
+            return connection.get().prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table ORDER BY embedding <#> ?::vector LIMIT 10");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -37,7 +53,7 @@ public class PgFlavor {
 
     private static final ThreadLocal<PreparedStatement> restrictiveAnnStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table WHERE language = 'sq' ORDER BY embedding <#> ?::vector LIMIT 10");
+            return connection.get().prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table WHERE language = 'sq' ORDER BY embedding <#> ?::vector LIMIT 10");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -45,18 +61,13 @@ public class PgFlavor {
 
     private static final ThreadLocal<PreparedStatement> unrestrictiveAnnStmt = ThreadLocal.withInitial(() -> {
         try {
-            return connection.prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table WHERE language = 'en' ORDER BY embedding <#> ?::vector LIMIT 10");
+            return connection.get().prepareStatement("SELECT id, title, url, passage FROM coherebench.embeddings_table WHERE language = 'en' ORDER BY embedding <#> ?::vector LIMIT 10");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     });
 
     public static void benchmark() throws IOException, InterruptedException, SQLException {
-        // Set up PostgreSQL connection
-        connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/coherebench", "postgres", "postgres");
-        PGvector.addVectorType(connection);
-        log("Connected to PostgreSQL.");
-
         executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
 
         int totalRowsInserted = 0;
@@ -101,9 +112,9 @@ public class PgFlavor {
 
                 // Perform queries
                 log("Performing queries");
-                executeQueriesAndCollectStats(simpleAnnStmt.get(), iterator, simpleQueryLatencies);
-                executeQueriesAndCollectStats(restrictiveAnnStmt.get(), iterator, restrictiveQueryLatencies);
-                executeQueriesAndCollectStats(unrestrictiveAnnStmt.get(), iterator, unrestrictiveQueryLatencies);
+                executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
+                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
+                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
 
                 // Print the stats
                 printStats("Insert", insertLatencies);
@@ -112,20 +123,23 @@ public class PgFlavor {
                 printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
             }
         } finally {
-            if (connection != null) {
-                connection.close();
+            executorService.shutdown();
+            executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            if (connection.get() != null) {
+                connection.get().close();
             }
         }
     }
 
-    private static void executeQueriesAndCollectStats(PreparedStatement stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
+    private static void executeQueriesAndCollectStats(ThreadLocal<PreparedStatement> stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
             var start = System.nanoTime();
             executorService.submit(() -> {
                 try {
-                    stmt.setObject(1, convertToArray(rowData.embedding()));
-                    stmt.executeQuery();
+                    PreparedStatement statement = stmt.get();
+                    statement.setObject(1, convertToArray(rowData.embedding()));
+                    statement.executeQuery();
                     long latency = System.nanoTime() - start;
                     latencies.add(latency);
                 } catch (SQLException e) {
@@ -138,5 +152,6 @@ public class PgFlavor {
         executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
     }
 }
+
 
 
