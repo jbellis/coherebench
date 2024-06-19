@@ -9,7 +9,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -23,16 +26,27 @@ public class PgFlavor {
     private static final int CONCURRENT_REQUESTS = 100;
     private static ExecutorService executorService;
 
+    private static final Set<Connection> connections = ConcurrentHashMap.newKeySet();
     // ThreadLocal for Connections
     private static final ThreadLocal<Connection> connection = ThreadLocal.withInitial(() -> {
         try {
             Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost:5432/coherebench", "postgres", "postgres");
             PGvector.addVectorType(conn);
+            connections.add(conn);
             return conn;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     });
+    private static void closeAll() {
+        for (Connection conn : connections) {
+            try {
+                conn.close();
+            } catch (SQLException e) {
+                log("Failed to close connection: %s", e);
+            }
+        }
+    }
 
     // ThreadLocal for PreparedStatements
     private static final ThreadLocal<PreparedStatement> insertStmt = ThreadLocal.withInitial(() -> {
@@ -106,6 +120,7 @@ public class PgFlavor {
                 }
                 executorService.shutdown();
                 executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                closeAll();
                 executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
                 totalRowsInserted += batchSize;
                 batchSize = totalRowsInserted; // double every time
@@ -121,12 +136,6 @@ public class PgFlavor {
                 printStats("Simple Query", simpleQueryLatencies);
                 printStats("Restrictive Query", restrictiveQueryLatencies);
                 printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
-            }
-        } finally {
-            executorService.shutdown();
-            executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-            if (connection.get() != null) {
-                connection.get().close();
             }
         }
     }
@@ -149,6 +158,7 @@ public class PgFlavor {
         }
         executorService.shutdown();
         executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        closeAll();
         executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
     }
 }
