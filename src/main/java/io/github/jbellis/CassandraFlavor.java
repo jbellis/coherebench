@@ -67,8 +67,8 @@ public class CassandraFlavor {
                     var rowData = iterator.next();
                     var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
                     var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), convertToCql(rowData.embedding()));
-                    long start = System.nanoTime();
                     semaphore.acquire();
+                    long start = System.nanoTime();
                     var asyncResult = session.executeAsync(bound);
                     asyncResult.whenComplete((rs, th) -> {
                         long latency = System.nanoTime() - start;
@@ -104,8 +104,8 @@ public class CassandraFlavor {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
             var bound = stmt.bind(convertToCql(rowData.embedding()));
-            long start = System.nanoTime();
             semaphore.acquire();
+            long start = System.nanoTime();
             var asyncResult = session.executeAsync(bound);
             asyncResult.whenComplete((rs, th) -> {
                 long latency = System.nanoTime() - start;

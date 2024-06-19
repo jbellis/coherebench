@@ -100,10 +100,10 @@ public class PgFlavor {
                 for (int i = 0; i < batchSize; i++) {
                     var rowData = iterator.next();
                     var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
-                    var start = System.nanoTime();
                     executorService.submit(() -> {
                         try {
                             PreparedStatement stmt = insertStmt.get();
+                            var start = System.nanoTime();
                             stmt.setString(1, rowData._id());
                             stmt.setString(2, language);
                             stmt.setString(3, rowData.title());
@@ -143,10 +143,10 @@ public class PgFlavor {
     private static void executeQueriesAndCollectStats(ThreadLocal<PreparedStatement> stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
-            var start = System.nanoTime();
             executorService.submit(() -> {
                 try {
                     PreparedStatement statement = stmt.get();
+                    var start = System.nanoTime();
                     statement.setObject(1, convertToArray(rowData.embedding()));
                     statement.executeQuery();
                     long latency = System.nanoTime() - start;
