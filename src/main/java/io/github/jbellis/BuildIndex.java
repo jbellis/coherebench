@@ -2,11 +2,6 @@ package io.github.jbellis;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
-import com.datastax.oss.driver.api.core.CqlIdentifier;
-import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
-import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
-import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.data.CqlVector;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -20,20 +15,14 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class BuildIndex {
     private static final Config config = new Config();
-    private static final int N_SHARDS = 378;
-    private static final int CONCURRENT_REQUESTS = 100;
-    private static CqlSession session;
-    private static Semaphore semaphore;
+    static final int N_SHARDS = 378;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         config.validateDatasetPath();
@@ -43,111 +32,10 @@ public class BuildIndex {
         var rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         rootLogger.setLevel(Level.INFO);
 
-        // set up C* session
-        var configBuilder = DriverConfigLoader.programmaticBuilder()
-                // timeouts go to 11
-                .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600));
-        // no way to do this in the driver, apparently
-        semaphore = new Semaphore(CONCURRENT_REQUESTS);
-
-        session = CqlSession.builder()
-                .withConfigLoader(configBuilder.build())
-                .withKeyspace(CqlIdentifier.fromCql("coherebench"))
-                .build();
-        log("Connected to Cassandra.");
-
-        benchmark();
+        CassandraFlavor.benchmark();
     }
 
-
-    private static void benchmark() throws IOException, InterruptedException {
-        var insertCql = "INSERT INTO embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?)";
-        var insertStmt = session.prepare(insertCql);
-        var simpleAnnCql = "SELECT id, title, url, passage FROM embeddings_table ORDER BY embedding ANN OF ? LIMIT 10";
-        var simpleAnnStmt = session.prepare(simpleAnnCql);
-        var restrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'sq' ORDER BY embedding ANN OF ? LIMIT 10";
-        var restrictiveAnnStmt = session.prepare(restrictiveAnnCql);
-        var unrestrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'en' ORDER BY embedding ANN OF ? LIMIT 10";
-        var unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
-
-        int totalRowsInserted = 0;
-        try (RowIterator iterator = new RowIterator(0, N_SHARDS)) {
-//            int batchSize = 1 << 17; // 128k
-            int batchSize = 1 << 10;
-
-            while (totalRowsInserted < 10_000_000) {
-                log("Batch size %d", batchSize);
-                // Stats collectors
-                var insertLatencies = new ArrayList<Long>();
-                var simpleQueryLatencies = new ArrayList<Long>();
-                var restrictiveQueryLatencies = new ArrayList<Long>();
-                var unrestrictiveQueryLatencies = new ArrayList<Long>();
-
-                // Insert rows
-                for (int i = 0; i < batchSize; i++) {
-                    var rowData = iterator.next();
-                    var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
-                    var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), rowData.embedding());
-                    long start = System.nanoTime();
-                    semaphore.acquire();
-                    var asyncResult = session.executeAsync(bound);
-                    asyncResult.whenComplete((rs, th) -> {
-                        long latency = System.nanoTime() - start;
-                        insertLatencies.add(latency);
-                        if (th != null) {
-                            log("Failed to insert row %s: %s", rowData._id(), th);
-                        }
-                        semaphore.release();
-                    });
-                }
-                log("Waiting for inserts to complete");
-                while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
-                    Thread.onSpinWait();
-                }
-                totalRowsInserted += batchSize;
-                batchSize = totalRowsInserted; // double every time
-
-                // Perform queries
-                log("Performing queries");
-                executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
-                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
-                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
-
-                // Print the stats
-                printStats("Insert", insertLatencies);
-                printStats("Simple Query", simpleQueryLatencies);
-                printStats("Restrictive Query", restrictiveQueryLatencies);
-                printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
-            }
-        }
-    }
-
-    private static void executeQueriesAndCollectStats(PreparedStatement stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
-        for (int i = 0; i < 10_000; i++) {
-            var rowData = iterator.next();
-            var bound = stmt.bind((Object) rowData.embedding());
-            long start = System.nanoTime();
-            semaphore.acquire();
-            var asyncResult = session.executeAsync(bound);
-            asyncResult.whenComplete((rs, th) -> {
-                long latency = System.nanoTime() - start;
-                latencies.add(latency);
-                if (th != null) {
-                    log("Failed to query row %s: %s", rowData._id(), th);
-                }
-                semaphore.release();
-            });
-        }
-        while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
-            Thread.onSpinWait();
-        }
-    }
-
-    private static void printStats(String operationType, List<Long> latencies) {
+    static void printStats(String operationType, List<Long> latencies) {
         if (latencies.isEmpty()) {
             System.out.println(operationType + " - No data collected.");
             return;
@@ -170,7 +58,7 @@ public class BuildIndex {
         System.out.printf("    99th percentile latency (ms): %.2f%n", p99);
     }
 
-    private static class RowIterator implements Iterator<RowData>, Closeable {
+    static class RowIterator implements Iterator<RowData>, Closeable {
         private final RootAllocator allocator = new RootAllocator();
         private FileInputStream fileInputStream;
         private ArrowStreamReader reader;
@@ -256,8 +144,10 @@ public class BuildIndex {
         return CqlVector.newInstance(floatArray);
     }
 
-    private static void log(String message, Object... args) {
+    static void log(String message, Object... args) {
         var timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         System.out.format(timestamp + ": " + message + "%n", args);
     }
+
+    record RowData(String _id, String url, String title, String text, CqlVector<Float> embedding) {}
 }
