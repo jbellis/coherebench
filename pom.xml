@@ -26,14 +26,26 @@
             <version>16.1.0</version>
         </dependency>
         <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.6</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.datastax.oss</groupId>
             <artifactId>java-driver-core</artifactId>
             <version>4.17.0</version>
         </dependency>
+
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.5.6</version>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.pgvector</groupId>
+            <artifactId>pgvector</artifactId>
+            <version>0.1.4</version>
         </dependency>
     </dependencies>
 
@@ -51,19 +63,9 @@
                         <id>buildindex</id>
                         <configuration>
                             <arguments>
-                                <argument>--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED</argument>
-                                <argument>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</argument>
-                                <argument>--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED</argument>
-                                <argument>--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</argument>
-                                <argument>--add-opens=jdk.compiler/com.sun.tools.javac=ALL-UNNAMED</argument>
-                                <argument>--add-opens=java.base/java.lang=ALL-UNNAMED</argument>
-                                <argument>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argument>
-                                <argument>--add-opens=java.base/java.io=ALL-UNNAMED</argument>
-                                <argument>--add-opens=java.base/java.util=ALL-UNNAMED</argument>
-                                <argument>--add-modules=jdk.incubator.vector</argument>
-                                <argument>--add-opens=java.base/java.nio=ALL-UNNAMED</argument>
+                                <argument>--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED</argument>
                                 <argument>-Xlog:gc=info:gc.log:time</argument>
-                                <argument>-Xmx36G</argument>
+                                <argument>-Xmx4G</argument>
                                 <argument>-classpath</argument>
                                 <classpath />
                                 <argument>io.github.jbellis.BuildIndex</argument>

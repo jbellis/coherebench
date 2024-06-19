@@ -1,5 +1,6 @@
 package io.github.jbellis;
 
+import com.pgvector.PGvector;
 import io.github.jbellis.BuildIndex.RowIterator;
 
 import java.io.IOException;
@@ -8,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 
+import static io.github.jbellis.BuildIndex.convertToArray;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
 
@@ -52,6 +54,7 @@ public class PgFlavor {
     public static void benchmark() throws IOException, InterruptedException, SQLException {
         // Set up PostgreSQL connection
         connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/coherebench", "username", "password");
+        PGvector.addVectorType(connection);
         log("Connected to PostgreSQL.");
 
         executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
@@ -81,7 +84,7 @@ public class PgFlavor {
                             stmt.setString(3, rowData.title());
                             stmt.setString(4, rowData.url());
                             stmt.setString(5, rowData.text());
-                            stmt.setString(6, rowData.embedding().toString());
+                            stmt.setObject(6, convertToArray(rowData.embedding()));
                             stmt.executeUpdate();
                             long latency = System.nanoTime() - start;
                             insertLatencies.add(latency);
@@ -122,7 +125,7 @@ public class PgFlavor {
             var start = System.nanoTime();
             executorService.submit(() -> {
                 try {
-                    stmt.setString(1, rowData.embedding().toString());
+                    stmt.setObject(1, convertToArray(rowData.embedding()));
                     stmt.executeQuery();
                     long latency = System.nanoTime() - start;
                     latencies.add(latency);

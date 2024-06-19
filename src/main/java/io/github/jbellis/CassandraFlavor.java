@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static io.github.jbellis.BuildIndex.convertToCql;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
 
@@ -65,7 +66,7 @@ public class CassandraFlavor {
                 for (int i = 0; i < batchSize; i++) {
                     var rowData = iterator.next();
                     var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
-                    var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), rowData.embedding());
+                    var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), convertToCql(rowData.embedding()));
                     long start = System.nanoTime();
                     semaphore.acquire();
                     var asyncResult = session.executeAsync(bound);
@@ -103,7 +104,7 @@ public class CassandraFlavor {
     private static void executeQueriesAndCollectStats(PreparedStatement stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
-            var bound = stmt.bind((Object) rowData.embedding());
+            var bound = stmt.bind(convertToCql(rowData.embedding()));
             long start = System.nanoTime();
             semaphore.acquire();
             var asyncResult = session.executeAsync(bound);

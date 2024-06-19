@@ -124,8 +124,7 @@ public class BuildIndex {
             String title = root.getVector("title").getObject(rowIndex).toString();
             String passage = root.getVector("text").getObject(rowIndex).toString();
             var jsonList = (JsonStringArrayList<?>) root.getVector("emb").getObject(rowIndex);
-            var embedding = convertToVector(jsonList);
-            return new RowData(id, url, title, passage, embedding);
+            return new RowData(id, url, title, passage, jsonList);
         }
 
         @Override
@@ -136,7 +135,7 @@ public class BuildIndex {
         }
     }
 
-    private static CqlVector<Float> convertToVector(JsonStringArrayList<?> jsonList) {
+    static CqlVector<Float> convertToCql(JsonStringArrayList<?> jsonList) {
         var floatArray = new Float[jsonList.size()];
         for (int i = 0; i < jsonList.size(); i++) {
             floatArray[i] = Float.parseFloat(jsonList.get(i).toString());
@@ -144,10 +143,18 @@ public class BuildIndex {
         return CqlVector.newInstance(floatArray);
     }
 
+    static float[] convertToArray(JsonStringArrayList<?> jsonList) {
+        var floatArray = new float[jsonList.size()];
+        for (int i = 0; i < jsonList.size(); i++) {
+            floatArray[i] = Float.parseFloat(jsonList.get(i).toString());
+        }
+        return floatArray;
+    }
+
     static void log(String message, Object... args) {
         var timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         System.out.format(timestamp + ": " + message + "%n", args);
     }
 
-    record RowData(String _id, String url, String title, String text, CqlVector<Float> embedding) {}
+    record RowData(String _id, String url, String title, String text, JsonStringArrayList<?> embedding) {}
 }
