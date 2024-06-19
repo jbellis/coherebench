@@ -42,8 +42,11 @@ public class BuildIndex {
             return;
         }
         long sum = 0;
-        for (long latency : latencies) {
-            sum += latency;
+        for (var latency : latencies) {
+            // not sure why this check is necessary
+            if (latency != null) {
+                sum += latency;
+            }
         }
         double averageLatency = (sum / (double) latencies.size()) / 1_000_000;
 
