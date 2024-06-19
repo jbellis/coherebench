@@ -20,6 +20,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class BuildIndex {
     private static final Config config = new Config();
@@ -36,17 +38,15 @@ public class BuildIndex {
         PgFlavor.benchmark();
     }
 
-    static void printStats(String operationType, List<Long> latencies) {
+    static void printStats(String operationType, List<Long> rawLatencies) {
+        // not sure why this is necessary
+        var latencies = rawLatencies.stream().filter(Objects::nonNull).collect(Collectors.toList());
         if (latencies.isEmpty()) {
-            System.out.println(operationType + " - No data collected.");
             return;
         }
         long sum = 0;
         for (var latency : latencies) {
-            // not sure why this check is necessary
-            if (latency != null) {
-                sum += latency;
-            }
+            sum += latency;
         }
         double averageLatency = (sum / (double) latencies.size()) / 1_000_000;
 
