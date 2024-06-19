@@ -13,6 +13,7 @@ import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.sql.SQLException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -24,7 +25,7 @@ public class BuildIndex {
     private static final Config config = new Config();
     static final int N_SHARDS = 378;
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, SQLException {
         config.validateDatasetPath();
 
         // motherfucking java devs
@@ -32,7 +33,7 @@ public class BuildIndex {
         var rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         rootLogger.setLevel(Level.INFO);
 
-        CassandraFlavor.benchmark();
+        PgFlavor.benchmark();
     }
 
     static void printStats(String operationType, List<Long> latencies) {

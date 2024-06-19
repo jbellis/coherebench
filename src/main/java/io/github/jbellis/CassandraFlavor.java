@@ -79,7 +79,6 @@ public class CassandraFlavor {
                         semaphore.release();
                     });
                 }
-                log("Waiting for inserts to complete");
                 while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
                     Thread.onSpinWait();
                 }

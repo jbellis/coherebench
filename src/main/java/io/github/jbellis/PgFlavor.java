@@ -93,7 +93,6 @@ public class PgFlavor {
                         }
                     });
                 }
-                log("Waiting for inserts to complete");
                 executorService.shutdown();
                 executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
                 executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
