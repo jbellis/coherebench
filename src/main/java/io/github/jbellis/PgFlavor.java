@@ -53,7 +53,7 @@ public class PgFlavor {
 
     public static void benchmark() throws IOException, InterruptedException, SQLException {
         // Set up PostgreSQL connection
-        connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/coherebench", "username", "password");
+        connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/coherebench", "postgres", "postgres");
         PGvector.addVectorType(connection);
         log("Connected to PostgreSQL.");
 
