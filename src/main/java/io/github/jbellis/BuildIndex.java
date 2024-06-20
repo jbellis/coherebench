@@ -27,7 +27,7 @@ public class BuildIndex {
     private static final Config config = new Config();
     static final int N_SHARDS = 378;
 
-    public static void main(String[] args) throws IOException, InterruptedException, SQLException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         config.validateDatasetPath();
 
         // motherfucking java devs

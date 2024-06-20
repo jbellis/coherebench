@@ -9,13 +9,13 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import static io.github.jbellis.BuildIndex.convertToArray;
@@ -81,8 +81,8 @@ public class PgFlavor {
         }
     });
 
-    public static void benchmark() throws IOException, InterruptedException, SQLException {
-        executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
+    public static void benchmark() throws IOException, InterruptedException {
+        executorService = createExecutor();
 
         int totalRowsInserted = 0;
         try (RowIterator iterator = new RowIterator(0, BuildIndex.N_SHARDS)) {
@@ -118,10 +118,7 @@ public class PgFlavor {
                         }
                     });
                 }
-                executorService.shutdown();
-                executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-                closeAll();
-                executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
+                drainAndReinitExecutor();
                 totalRowsInserted += batchSize;
                 batchSize = totalRowsInserted; // double every time
 
@@ -140,6 +137,22 @@ public class PgFlavor {
         }
     }
 
+    private static void drainAndReinitExecutor() throws InterruptedException {
+        executorService.shutdown();
+        executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        closeAll();
+        executorService = createExecutor();
+    }
+
+    private static ExecutorService createExecutor() {
+        return new ThreadPoolExecutor(CONCURRENT_REQUESTS,
+                                      CONCURRENT_REQUESTS,
+                                      0L,
+                                      TimeUnit.MILLISECONDS,
+                                      new ArrayBlockingQueue<>(2 * CONCURRENT_REQUESTS),
+                                      new ThreadPoolExecutor.CallerRunsPolicy());
+    }
+
     private static void executeQueriesAndCollectStats(ThreadLocal<PreparedStatement> stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
@@ -156,10 +169,7 @@ public class PgFlavor {
                 }
             });
         }
-        executorService.shutdown();
-        executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-        closeAll();
-        executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
+        drainAndReinitExecutor();
     }
 }
 
