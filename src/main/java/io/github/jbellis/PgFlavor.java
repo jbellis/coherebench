@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -145,12 +146,23 @@ public class PgFlavor {
     }
 
     private static ExecutorService createExecutor() {
-        return new ThreadPoolExecutor(CONCURRENT_REQUESTS,
-                                      CONCURRENT_REQUESTS,
-                                      0L,
-                                      TimeUnit.MILLISECONDS,
-                                      new ArrayBlockingQueue<>(2 * CONCURRENT_REQUESTS),
-                                      new ThreadPoolExecutor.CallerRunsPolicy());
+        // Custom rejection policy
+        return new ThreadPoolExecutor(
+                CONCURRENT_REQUESTS,
+                CONCURRENT_REQUESTS,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(2 * CONCURRENT_REQUESTS),
+                (runnable, executor) -> {
+                    try {
+                        // Block the caller until there's space in the queue
+                        executor.getQueue().put(runnable);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt(); // Restore the interrupted status
+                        throw new RejectedExecutionException("Interrupted while waiting for space in the queue", e);
+                    }
+                }
+        );
     }
 
     private static void executeQueriesAndCollectStats(ThreadLocal<PreparedStatement> stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
