@@ -1,7 +1,7 @@
 package io.github.jbellis;
 
 import com.pgvector.PGvector;
-import io.github.jbellis.BuildIndex.RowIterator;
+import io.github.jbellis.BuildIndex.DataIterator;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -39,6 +39,7 @@ public class PgFlavor {
             throw new RuntimeException(e);
         }
     });
+
     private static void closeAll() {
         for (Connection conn : connections) {
             try {
@@ -86,8 +87,8 @@ public class PgFlavor {
         executorService = createExecutor();
 
         int totalRowsInserted = 0;
-        try (RowIterator iterator = new RowIterator(0, BuildIndex.N_SHARDS)) {
-            int batchSize = 1 << 13;
+        try (var iterator = BuildIndex.dataSource()) {
+            int batchSize = BuildIndex.INITIAL_BATCH_SIZE;
 
             while (totalRowsInserted < 20_000_000) {
                 log("Batch size %d", batchSize);
@@ -165,7 +166,7 @@ public class PgFlavor {
         );
     }
 
-    private static void executeQueriesAndCollectStats(ThreadLocal<PreparedStatement> stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
+    private static void executeQueriesAndCollectStats(ThreadLocal<PreparedStatement> stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
             executorService.submit(() -> {

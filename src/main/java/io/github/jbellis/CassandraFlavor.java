@@ -5,6 +5,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import io.github.jbellis.BuildIndex.DataIterator;
 import io.github.jbellis.BuildIndex.RowIterator;
 
 import java.io.IOException;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static io.github.jbellis.BuildIndex.INITIAL_BATCH_SIZE;
 import static io.github.jbellis.BuildIndex.convertToCql;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
@@ -50,9 +52,9 @@ public class CassandraFlavor {
         var unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
 
         int totalRowsInserted = 0;
-        try (RowIterator iterator = new RowIterator(0, BuildIndex.N_SHARDS)) {
+        try (var iterator = BuildIndex.dataSource()) {
 //            int batchSize = 1 << 17; // 128k
-            int batchSize = 1 << 10;
+            int batchSize = INITIAL_BATCH_SIZE;
 
             while (totalRowsInserted < 10_000_000) {
                 log("Batch size %d", batchSize);
@@ -100,7 +102,7 @@ public class CassandraFlavor {
         }
     }
 
-    private static void executeQueriesAndCollectStats(PreparedStatement stmt, RowIterator iterator, List<Long> latencies) throws InterruptedException {
+    private static void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
             var bound = stmt.bind(convertToCql(rowData.embedding()));

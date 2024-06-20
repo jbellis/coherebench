@@ -13,7 +13,6 @@ import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.sql.SQLException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -21,21 +20,21 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public class BuildIndex {
     private static final Config config = new Config();
     static final int N_SHARDS = 378;
+    static final int INITIAL_BATCH_SIZE = 1 << 13;
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        config.validateDatasetPath();
-
         // motherfucking java devs
         var loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         var rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         rootLogger.setLevel(Level.INFO);
 
-        PgFlavor.benchmark();
+        CassandraFlavor.benchmark();
     }
 
     static void printStats(String operationType, List<Long> rawLatencies) {
@@ -62,7 +61,35 @@ public class BuildIndex {
         System.out.printf("    99th percentile latency (ms): %.2f%n", p99);
     }
 
-    static class RowIterator implements Iterator<RowData>, Closeable {
+    static DataIterator dataSource() throws IOException {
+        return new RowIterator(0, N_SHARDS);
+//        return new MockDataIterator();
+    }
+
+    private static class MockDataIterator implements DataIterator {
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public boolean hasNext() {
+            return true;
+        }
+
+        @Override
+        public RowData next() {
+            var uuid = java.util.UUID.randomUUID();
+            var jsonList = new JsonStringArrayList<Float>(1024);
+            for (int i = 0; i < 1024; i++) {
+                jsonList.add(ThreadLocalRandom.current().nextFloat());
+            }
+            return new RowData(uuid.toString(), "http://example.com/" + uuid, "Title", "Text", jsonList);
+        }
+    }
+
+    public interface DataIterator extends Iterator<RowData>, Closeable {}
+
+    static class RowIterator implements DataIterator {
         private final RootAllocator allocator = new RootAllocator();
         private FileInputStream fileInputStream;
         private ArrowStreamReader reader;
@@ -74,6 +101,7 @@ public class BuildIndex {
         private int currentRowIndex = 0;
 
         RowIterator(int startShardIndex, int endShardIndex) throws IOException {
+            config.validateDatasetPath();
             this.endShardIndex = endShardIndex;
             initReader(startShardIndex);
             nextShardIndex = startShardIndex + 1;
