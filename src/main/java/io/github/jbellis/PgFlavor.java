@@ -87,9 +87,9 @@ public class PgFlavor {
 
         int totalRowsInserted = 0;
         try (RowIterator iterator = new RowIterator(0, BuildIndex.N_SHARDS)) {
-            int batchSize = 1 << 10;
+            int batchSize = 1 << 13;
 
-            while (totalRowsInserted < 10_000_000) {
+            while (totalRowsInserted < 20_000_000) {
                 log("Batch size %d", batchSize);
                 // Stats collectors
                 var insertLatencies = new ArrayList<Long>();
