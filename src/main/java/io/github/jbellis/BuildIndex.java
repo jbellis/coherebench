@@ -101,7 +101,7 @@ public class BuildIndex {
         private int currentRowIndex = 0;
 
         RowIterator(int startShardIndex, int endShardIndex) throws IOException {
-            config.validateDatasetPath();
+            config.validate();
             this.endShardIndex = endShardIndex;
             initReader(startShardIndex);
             nextShardIndex = startShardIndex + 1;
