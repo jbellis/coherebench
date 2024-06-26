@@ -24,7 +24,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public class BuildIndex {
-    private static final Config config = new Config();
+    static final Config config = new Config();
     static final int N_SHARDS = 378;
     static final int INITIAL_BATCH_SIZE = 1 << 13;
 

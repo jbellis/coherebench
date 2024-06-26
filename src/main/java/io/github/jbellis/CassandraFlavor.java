@@ -131,7 +131,7 @@ public class CassandraFlavor {
     }
 
     private static void waitForCompactionsToFinish() throws IOException, InterruptedException {
-        String command = "nodetool compactionstats";
+        String command = BuildIndex.config.getNodetoolPath() + " compactionstats";
         while (true) {
             Process process = Runtime.getRuntime().exec(command);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));

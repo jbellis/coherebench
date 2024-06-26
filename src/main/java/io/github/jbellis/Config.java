@@ -43,4 +43,8 @@ public class Config {
     public String filenameForShard(int shardIndex) {
         return filenameForShard("en", shardIndex);
     }
+
+    public Path getNodetoolPath() {
+        return nodetoolPath;
+    }
 }
