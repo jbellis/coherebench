@@ -90,9 +90,7 @@ public class CassandraFlavor {
                 batchSize = totalRowsInserted; // double every time
 
                 log("Waiting for compactions to finish...");
-                var start = System.currentTimeMillis();
                 waitForCompactionsToFinish();
-                log("Compactions took %d seconds", (System.currentTimeMillis() - start) / 1000);
 
                 // Perform queries
                 log("Performing queries");
