@@ -8,7 +8,9 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import io.github.jbellis.BuildIndex.DataIterator;
 import io.github.jbellis.BuildIndex.RowIterator;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -87,6 +89,11 @@ public class CassandraFlavor {
                 totalRowsInserted += batchSize;
                 batchSize = totalRowsInserted; // double every time
 
+                log("Waiting for compactions to finish...");
+                var start = System.currentTimeMillis();
+                waitForCompactionsToFinish();
+                log("Compactions took %d seconds", (System.currentTimeMillis() - start) / 1000);
+
                 // Perform queries
                 log("Performing queries");
                 executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
@@ -120,6 +127,22 @@ public class CassandraFlavor {
         }
         while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
             Thread.onSpinWait();
+        }
+    }
+
+    private static void waitForCompactionsToFinish() throws IOException, InterruptedException {
+        String command = "nodetool compactionstats";
+        while (true) {
+            Process process = Runtime.getRuntime().exec(command);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains("pending tasks: 0")) {
+                    return;
+                }
+            }
+            process.waitFor();
+            Thread.sleep(1000);
         }
     }
 }
