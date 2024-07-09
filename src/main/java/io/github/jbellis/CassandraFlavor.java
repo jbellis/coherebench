@@ -6,7 +6,6 @@ import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import io.github.jbellis.BuildIndex.DataIterator;
-import io.github.jbellis.BuildIndex.RowIterator;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,12 +16,14 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.BuildIndex.INITIAL_BATCH_SIZE;
+import static io.github.jbellis.BuildIndex.SKIP_COUNT;
 import static io.github.jbellis.BuildIndex.convertToCql;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
 
 public class CassandraFlavor {
-    private static final int CONCURRENT_REQUESTS = 100;
+    private static final int CONCURRENT_WRITES = 100;
+    private static final int CONCURRENT_READS = 16;
     private static CqlSession session;
     private static Semaphore semaphore;
 
@@ -35,8 +36,6 @@ public class CassandraFlavor {
                 .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
                 .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600));
-        // no way to do this in the driver, apparently
-        semaphore = new Semaphore(CONCURRENT_REQUESTS);
 
         session = CqlSession.builder()
                 .withConfigLoader(configBuilder.build())
@@ -53,11 +52,13 @@ public class CassandraFlavor {
         var unrestrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'en' ORDER BY embedding ANN OF ? LIMIT 10";
         var unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
 
-        int totalRowsInserted = 0;
         try (var iterator = BuildIndex.dataSource()) {
-//            int batchSize = 1 << 17; // 128k
             int batchSize = INITIAL_BATCH_SIZE;
+            for (int i = 0; i < SKIP_COUNT; i++) {
+                iterator.next();
+            }
 
+            int totalRowsInserted = SKIP_COUNT;
             while (totalRowsInserted < 10_000_000) {
                 log("Batch size %d", batchSize);
                 // Stats collectors
@@ -67,6 +68,7 @@ public class CassandraFlavor {
                 var unrestrictiveQueryLatencies = new ArrayList<Long>();
 
                 // Insert rows
+                semaphore = new Semaphore(CONCURRENT_WRITES);
                 for (int i = 0; i < batchSize; i++) {
                     var rowData = iterator.next();
                     var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
@@ -83,7 +85,7 @@ public class CassandraFlavor {
                         semaphore.release();
                     });
                 }
-                while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
+                while (semaphore.availablePermits() < CONCURRENT_WRITES) {
                     Thread.onSpinWait();
                 }
                 totalRowsInserted += batchSize;
@@ -94,6 +96,7 @@ public class CassandraFlavor {
 
                 // Perform queries
                 log("Performing queries");
+                semaphore = new Semaphore(CONCURRENT_READS);
                 executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
                 executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
                 executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
@@ -123,7 +126,7 @@ public class CassandraFlavor {
                 semaphore.release();
             });
         }
-        while (semaphore.availablePermits() < CONCURRENT_REQUESTS) {
+        while (semaphore.availablePermits() < CONCURRENT_READS) {
             Thread.onSpinWait();
         }
     }

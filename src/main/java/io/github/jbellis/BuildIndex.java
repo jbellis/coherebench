@@ -26,7 +26,8 @@ import java.util.stream.Collectors;
 public class BuildIndex {
     static final Config config = new Config();
     static final int N_SHARDS = 378;
-    static final int INITIAL_BATCH_SIZE = 1 << 13;
+    static final int SKIP_COUNT = 1048576 * 2;
+    static final int INITIAL_BATCH_SIZE = SKIP_COUNT;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // motherfucking java devs
