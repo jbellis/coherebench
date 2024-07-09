@@ -56,6 +56,9 @@ public class CassandraFlavor {
             int batchSize = INITIAL_BATCH_SIZE;
             for (int i = 0; i < SKIP_COUNT; i++) {
                 iterator.next();
+                if (i % 100_000 == 0) {
+                    log("Skipped %d rows", i);
+                }
             }
 
             int totalRowsInserted = SKIP_COUNT;
