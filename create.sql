@@ -1,3 +1,5 @@
+CREATE EXTENSION vector;
+
 CREATE SCHEMA coherebench;
 
 CREATE TABLE coherebench.embeddings_table (
