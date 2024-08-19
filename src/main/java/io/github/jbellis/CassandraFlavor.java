@@ -66,7 +66,7 @@ public class CassandraFlavor {
         }
     }
 
-    public static void benchmark() throws InterruptedException {
+    public static void benchmark() throws InterruptedException, IOException {
         connect();
         semaphore = new Semaphore(CONCURRENT_READS);
 
