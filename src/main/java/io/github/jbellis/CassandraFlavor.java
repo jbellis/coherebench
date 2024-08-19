@@ -16,6 +16,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.BuildIndex.INITIAL_BATCH_SIZE;
+import static io.github.jbellis.BuildIndex.SKIP_COUNT;
 import static io.github.jbellis.BuildIndex.convertToCql;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
@@ -65,16 +66,22 @@ public class CassandraFlavor {
         }
     }
 
-    public static void benchmark() {
+    public static void benchmark() throws InterruptedException {
         connect();
         semaphore = new Semaphore(CONCURRENT_READS);
 
-        for (int i = 1; i <= 5; i++) {
-            var cql = String.format("SELECT id, title, url, passage FROM embeddings_table WHERE b%d = true ORDER BY embedding ANN OF ? LIMIT 10", i);
-            var stmt = session.prepare(cql);
-            var latencies = new ArrayList<Long>();
-            executeQueriesAndCollectStats(stmt, iterator, latencies);
-            printStats(String.format("0.0%d selectivity", i), latencies);
+        try (var iterator = BuildIndex.dataSource()) {
+            for (int i = 0; i < SKIP_COUNT; i++) {
+                iterator.next();
+            }
+
+            for (int i = 1; i <= 5; i++) {
+                var cql = String.format("SELECT id, title, url, passage FROM embeddings_table WHERE b%d = true ORDER BY embedding ANN OF ? LIMIT 10", i);
+                var stmt = session.prepare(cql);
+                var latencies = new ArrayList<Long>();
+                executeQueriesAndCollectStats(stmt, iterator, latencies);
+                printStats(String.format("0.0%d selectivity", i), latencies);
+            }
         }
     }
 
