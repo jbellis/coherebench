@@ -16,7 +16,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.BuildIndex.INITIAL_BATCH_SIZE;
-import static io.github.jbellis.BuildIndex.SKIP_COUNT;
 import static io.github.jbellis.BuildIndex.convertToCql;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
@@ -27,21 +26,8 @@ public class CassandraFlavor {
     private static CqlSession session;
     private static Semaphore semaphore;
 
-    public static void benchmark() throws IOException, InterruptedException {
-        // set up C* session
-        var configBuilder = DriverConfigLoader.programmaticBuilder()
-                // timeouts go to 11
-                .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
-                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600));
-
-        session = CqlSession.builder()
-                .withConfigLoader(configBuilder.build())
-                .withKeyspace(CqlIdentifier.fromCql("coherebench"))
-                .build();
-        log("Connected to Cassandra.");
+    public static void load() throws IOException, InterruptedException {
+        connect();
 
         var insertCql = "INSERT INTO embeddings_table (id, b1, b2, b3, b4, b5, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         var insertStmt = session.prepare(insertCql);
@@ -77,6 +63,37 @@ public class CassandraFlavor {
                 Thread.onSpinWait();
             }
         }
+    }
+
+    public static void benchmark() {
+        connect();
+        semaphore = new Semaphore(CONCURRENT_READS);
+
+        for (int i = 1; i <= 5; i++) {
+            var cql = String.format("SELECT id, title, url, passage FROM embeddings_table WHERE b%d = true ORDER BY embedding ANN OF ? LIMIT 10", i);
+            var stmt = session.prepare(cql);
+            var latencies = new ArrayList<Long>();
+            executeQueriesAndCollectStats(stmt, iterator, latencies);
+            printStats(String.format("0.0%d selectivity", i), latencies);
+        }
+    }
+
+    private static void connect() {
+        // set up C* session
+        var configBuilder = DriverConfigLoader.programmaticBuilder()
+                // timeouts go to 11
+                .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
+                .withDuration(DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT, java.time.Duration.ofSeconds(600))
+                .withDuration(DefaultDriverOption.CONNECTION_SET_KEYSPACE_TIMEOUT, java.time.Duration.ofSeconds(600))
+                .withDuration(DefaultDriverOption.HEARTBEAT_TIMEOUT, java.time.Duration.ofSeconds(600))
+                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, java.time.Duration.ofSeconds(600));
+
+        session = CqlSession.builder()
+                .withConfigLoader(configBuilder.build())
+                .withKeyspace(CqlIdentifier.fromCql("coherebench"))
+                .build();
+
+        log("Connected to Cassandra.");
     }
 
     private static void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
