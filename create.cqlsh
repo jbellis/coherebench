@@ -2,7 +2,11 @@ create keyspace coherebench WITH replication = {'class': 'SimpleStrategy', 'repl
 
 CREATE TABLE coherebench.embeddings_table (
     id text PRIMARY KEY,
-    language text,
+    b1 boolean,
+    b2 boolean,
+    b3 boolean,
+    b4 boolean,
+    b5 boolean,
     title text,
     url text,
     passage text,
@@ -13,8 +17,11 @@ CREATE CUSTOM INDEX ON coherebench.embeddings_table(embedding)
 USING 'StorageAttachedIndex'
 WITH OPTIONS = {'source_model': 'cohere-v3'};
 
-CREATE CUSTOM INDEX ON coherebench.embeddings_table(language)
-USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(b1) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(b2) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(b3) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(b4) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX ON coherebench.embeddings_table(b5) USING 'StorageAttachedIndex';
 
 ALTER TABLE coherebench.embeddings_table
 WITH compaction = {

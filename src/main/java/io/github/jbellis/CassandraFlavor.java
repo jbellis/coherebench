@@ -43,69 +43,38 @@ public class CassandraFlavor {
                 .build();
         log("Connected to Cassandra.");
 
-        var insertCql = "INSERT INTO embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?)";
+        var insertCql = "INSERT INTO embeddings_table (id, b1, b2, b3, b4, b5, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         var insertStmt = session.prepare(insertCql);
-        var simpleAnnCql = "SELECT id, title, url, passage FROM embeddings_table ORDER BY embedding ANN OF ? LIMIT 10";
-        var simpleAnnStmt = session.prepare(simpleAnnCql);
-        var restrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'sq' ORDER BY embedding ANN OF ? LIMIT 10";
-        var restrictiveAnnStmt = session.prepare(restrictiveAnnCql);
-        var unrestrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'en' ORDER BY embedding ANN OF ? LIMIT 10";
-        var unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
 
         try (var iterator = BuildIndex.dataSource()) {
-            int batchSize = INITIAL_BATCH_SIZE;
-            for (int i = 0; i < SKIP_COUNT; i++) {
-                iterator.next();
+            // Stats collectors
+            var insertLatencies = new ArrayList<Long>();
+
+            // Insert rows
+            semaphore = new Semaphore(CONCURRENT_WRITES);
+            for (int i = 0; i < INITIAL_BATCH_SIZE; i++) {
+                var rowData = iterator.next();
+                boolean b1 = ThreadLocalRandom.current().nextDouble() < 0.01;
+                boolean b2 = ThreadLocalRandom.current().nextDouble() < 0.02;
+                boolean b3 = ThreadLocalRandom.current().nextDouble() < 0.03;
+                boolean b4 = ThreadLocalRandom.current().nextDouble() < 0.04;
+                boolean b5 = ThreadLocalRandom.current().nextDouble() < 0.05;
+                var bound = insertStmt.bind(rowData._id(), b1, b2, b3, b4, b5,
+                                            rowData.title(), rowData.url(), rowData.text(), convertToCql(rowData.embedding()));
+                semaphore.acquire();
+                long start = System.nanoTime();
+                var asyncResult = session.executeAsync(bound);
+                asyncResult.whenComplete((rs, th) -> {
+                    long latency = System.nanoTime() - start;
+                    insertLatencies.add(latency);
+                    if (th != null) {
+                        log("Failed to insert row %s: %s", rowData._id(), th);
+                    }
+                    semaphore.release();
+                });
             }
-
-            int totalRowsInserted = SKIP_COUNT;
-            while (totalRowsInserted < 10_000_000) {
-                log("Batch size %d", batchSize);
-                // Stats collectors
-                var insertLatencies = new ArrayList<Long>();
-                var simpleQueryLatencies = new ArrayList<Long>();
-                var restrictiveQueryLatencies = new ArrayList<Long>();
-                var unrestrictiveQueryLatencies = new ArrayList<Long>();
-
-                // Insert rows
-                semaphore = new Semaphore(CONCURRENT_WRITES);
-                for (int i = 0; i < batchSize; i++) {
-                    var rowData = iterator.next();
-                    var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
-                    var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), convertToCql(rowData.embedding()));
-                    semaphore.acquire();
-                    long start = System.nanoTime();
-                    var asyncResult = session.executeAsync(bound);
-                    asyncResult.whenComplete((rs, th) -> {
-                        long latency = System.nanoTime() - start;
-                        insertLatencies.add(latency);
-                        if (th != null) {
-                            log("Failed to insert row %s: %s", rowData._id(), th);
-                        }
-                        semaphore.release();
-                    });
-                }
-                while (semaphore.availablePermits() < CONCURRENT_WRITES) {
-                    Thread.onSpinWait();
-                }
-                totalRowsInserted += batchSize;
-                batchSize = totalRowsInserted; // double every time
-
-                log("Waiting for compactions to finish...");
-                waitForCompactionsToFinish();
-
-                // Perform queries
-                log("Performing queries");
-                semaphore = new Semaphore(CONCURRENT_READS);
-                executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
-                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
-                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
-
-                // Print the stats
-                printStats("Insert", insertLatencies);
-                printStats("Simple Query", simpleQueryLatencies);
-                printStats("Restrictive Query", restrictiveQueryLatencies);
-                printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
+            while (semaphore.availablePermits() < CONCURRENT_WRITES) {
+                Thread.onSpinWait();
             }
         }
     }
