@@ -91,6 +91,7 @@ public class CassandraFlavor {
                 while (semaphore.availablePermits() < CONCURRENT_WRITES) {
                     Thread.onSpinWait();
                 }
+                printStats("Insert", insertLatencies);
                 totalRowsInserted += batchSize;
                 batchSize = totalRowsInserted; // double every time
 
@@ -101,19 +102,34 @@ public class CassandraFlavor {
                 log("Performing queries");
                 semaphore = new Semaphore(CONCURRENT_READS);
                 executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
-                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
-                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
-
-                // Print the stats
-                printStats("Insert", insertLatencies);
                 printStats("Simple Query", simpleQueryLatencies);
+                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
                 printStats("Restrictive Query", restrictiveQueryLatencies);
+                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
                 printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
             }
         }
     }
 
     private static void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
+        // warmup with 10%
+        for (int i = 0; i < 1_000; i++) {
+            var rowData = iterator.next();
+            var bound = stmt.bind(convertToCql(rowData.embedding()));
+            semaphore.acquire();
+            var asyncResult = session.executeAsync(bound);
+            asyncResult.whenComplete((rs, th) -> {
+                if (th != null) {
+                    log("Failed to query row %s: %s", rowData._id(), th);
+                }
+                semaphore.release();
+            });
+        }
+        while (semaphore.availablePermits() < CONCURRENT_READS) {
+            Thread.onSpinWait();
+        }
+
+        // time the actual workload
         for (int i = 0; i < 10_000; i++) {
             var rowData = iterator.next();
             var bound = stmt.bind(convertToCql(rowData.embedding()));
@@ -135,9 +151,15 @@ public class CassandraFlavor {
     }
 
     private static void waitForCompactionsToFinish() throws IOException, InterruptedException {
-        String command = BuildIndex.config.getNodetoolPath() + " compactionstats";
+        // first flush
+        String flushCmd = BuildIndex.config.getNodetoolPath() + " flush";
+        Process flushProcess = Runtime.getRuntime().exec(flushCmd);
+        flushProcess.waitFor();
+
+        // then wait for compactions
+        String statsCmd = BuildIndex.config.getNodetoolPath() + " compactionstats";
         while (true) {
-            Process process = Runtime.getRuntime().exec(command);
+            Process process = Runtime.getRuntime().exec(statsCmd);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
             while ((line = reader.readLine()) != null) {
