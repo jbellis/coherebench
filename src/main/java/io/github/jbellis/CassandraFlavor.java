@@ -26,6 +26,7 @@ public class CassandraFlavor {
     private static final int CONCURRENT_READS = 16;
     private static CqlSession session;
     private static Semaphore semaphore;
+    private static int totalRowsInserted;
 
     public static void benchmark() throws IOException, InterruptedException {
         // set up C* session
@@ -61,7 +62,7 @@ public class CassandraFlavor {
                 }
             }
 
-            int totalRowsInserted = SKIP_COUNT;
+            totalRowsInserted = SKIP_COUNT;
             while (totalRowsInserted < 10_000_000) {
                 log("Batch size %d", batchSize);
                 // Stats collectors
@@ -158,17 +159,24 @@ public class CassandraFlavor {
 
         // then wait for compactions
         String statsCmd = BuildIndex.config.getNodetoolPath() + " compactionstats";
+        outer:
         while (true) {
             Process process = Runtime.getRuntime().exec(statsCmd);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.contains("pending tasks: 0")) {
-                    return;
+                    break outer;
                 }
             }
             process.waitFor();
+            //noinspection BusyWait
             Thread.sleep(1000);
         }
+
+        // snapshot
+        String snapshotCmd = BuildIndex.config.getNodetoolPath() + " snapshot coherebench -cf embeddings_table -t cb-" + totalRowsInserted;
+        Process snapshotProcess = Runtime.getRuntime().exec(snapshotCmd);
+        snapshotProcess.waitFor();
     }
 }
