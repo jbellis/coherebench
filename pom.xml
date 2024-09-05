@@ -65,7 +65,7 @@
                             <arguments>
                                 <argument>--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED</argument>
                                 <argument>-Xlog:gc=info:gc.log:time</argument>
-                                <argument>-Xmx4G</argument>
+                                <argument>-Xmx2G</argument>
                                 <argument>-classpath</argument>
                                 <classpath />
                                 <argument>io.github.jbellis.BuildIndex</argument>
