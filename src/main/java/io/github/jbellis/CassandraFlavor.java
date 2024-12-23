@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.github.jbellis.BuildIndex.INITIAL_BATCH_SIZE;
@@ -71,6 +72,34 @@ public class CassandraFlavor {
                 var restrictiveQueryLatencies = new ArrayList<Long>();
                 var unrestrictiveQueryLatencies = new ArrayList<Long>();
 
+                // Progress tracking
+                long batchStartTime = System.currentTimeMillis();
+                long lastProgressTime = batchStartTime;
+                AtomicInteger completedRequests = new AtomicInteger(0);
+                
+                // Start progress reporting thread
+                int finalBatchSize = batchSize;
+                Thread progressThread = new Thread(() -> {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        try {
+                            Thread.sleep(5000); // Report every 5 seconds
+                            long now = System.currentTimeMillis();
+                            double elapsedSeconds = (now - batchStartTime) / 1000.0;
+                            int completed = completedRequests.get();
+                            double reqPerSec = completed / elapsedSeconds;
+                            double remainingRequests = finalBatchSize - completed;
+                            double estimatedSecondsRemaining = remainingRequests / reqPerSec;
+                            
+                            log("Progress: %d/%d requests (%.1f req/s), est. %.1f minutes remaining",
+                                completedRequests.get(), finalBatchSize, reqPerSec,
+                                estimatedSecondsRemaining / 60.0);
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                    }
+                });
+                progressThread.start();
+
                 // Insert rows
                 semaphore = new Semaphore(CONCURRENT_WRITES);
                 for (int i = 0; i < batchSize; i++) {
@@ -86,12 +115,22 @@ public class CassandraFlavor {
                         if (th != null) {
                             log("Failed to insert row %s: %s", rowData._id(), th);
                         }
+                        completedRequests.incrementAndGet();
                         semaphore.release();
                     });
                 }
                 while (semaphore.availablePermits() < CONCURRENT_WRITES) {
                     Thread.onSpinWait();
                 }
+                
+                // Stop progress thread
+                progressThread.interrupt();
+                try {
+                    progressThread.join();
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+                
                 printStats("Insert", insertLatencies);
                 totalRowsInserted += batchSize;
                 batchSize = totalRowsInserted; // double every time
