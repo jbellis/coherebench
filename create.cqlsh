@@ -19,7 +19,7 @@ USING 'StorageAttachedIndex';
 ALTER TABLE coherebench.embeddings_table
 WITH compaction = {
   'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy',
-  'min_sstable_size_in_mb': 1024,
+  'min_sstable_size_in_mb': 512,
   'num_shards': 1,
   'static_scaling_factors': -8,
   'max_sstables_to_compact': 4,
