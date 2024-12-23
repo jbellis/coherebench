@@ -23,7 +23,7 @@ import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
 
 public class CassandraFlavor {
-    private static final int CONCURRENT_WRITES = 1000;
+    private static final int CONCURRENT_WRITES = 100;
     private static final int CONCURRENT_READS = 16;
     private static CqlSession session;
     private static Semaphore semaphore;
@@ -134,6 +134,19 @@ public class CassandraFlavor {
                 printStats("Insert", insertLatencies);
                 totalRowsInserted += batchSize;
                 batchSize = totalRowsInserted; // double every time
+
+                log("Waiting for compactions to finish...");
+                waitForCompactionsToFinish();
+
+                // Perform queries
+                log("Performing queries");
+                semaphore = new Semaphore(CONCURRENT_READS);
+                executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
+                printStats("Simple Query", simpleQueryLatencies);
+                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
+                printStats("Restrictive Query", restrictiveQueryLatencies);
+                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
+                printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
             }
         }
     }
