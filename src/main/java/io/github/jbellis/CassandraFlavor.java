@@ -5,7 +5,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
-import io.github.jbellis.BuildIndex.DataIterator;
+import io.github.jbellis.CohereBench.DataIterator;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static io.github.jbellis.BuildIndex.convertToCql;
-import static io.github.jbellis.BuildIndex.log;
-import static io.github.jbellis.BuildIndex.printStats;
+import static io.github.jbellis.CohereBench.convertToCql;
+import static io.github.jbellis.CohereBench.log;
+import static io.github.jbellis.CohereBench.printStats;
 
 public class CassandraFlavor implements AutoCloseable {
     private static final int CONCURRENT_WRITES = 100;
@@ -97,12 +97,12 @@ public class CassandraFlavor implements AutoCloseable {
 
     private void waitForCompactionsToFinish() throws IOException, InterruptedException {
         // first flush
-        String flushCmd = BuildIndex.config.getNodetoolPath() + " flush";
+        String flushCmd = CohereBench.config.getNodetoolPath() + " flush";
         Process flushProcess = Runtime.getRuntime().exec(flushCmd);
         flushProcess.waitFor();
 
         // then wait for compactions
-        String statsCmd = BuildIndex.config.getNodetoolPath() + " compactionstats";
+        String statsCmd = CohereBench.config.getNodetoolPath() + " compactionstats";
         outer:
         while (true) {
             Process process = Runtime.getRuntime().exec(statsCmd);
@@ -119,14 +119,14 @@ public class CassandraFlavor implements AutoCloseable {
         }
 
         // snapshot
-        String snapshotCmd = BuildIndex.config.getNodetoolPath() + " snapshot coherebench -cf embeddings_table -t cb-" + totalRowsInserted;
+        String snapshotCmd = CohereBench.config.getNodetoolPath() + " snapshot coherebench -cf embeddings_table -t cb-" + totalRowsInserted;
         Process snapshotProcess = Runtime.getRuntime().exec(snapshotCmd);
         snapshotProcess.waitFor();
     }
 
     public void insert(int numRows, int skipRows) throws IOException, InterruptedException {
         semaphore = new Semaphore(CONCURRENT_WRITES);
-        try (DataIterator dataIterator = BuildIndex.dataSource()) {
+        try (DataIterator dataIterator = CohereBench.dataSource()) {
             // Skip rows if requested
             for (int i = 0; i < skipRows; i++) {
                 dataIterator.next();
@@ -170,7 +170,7 @@ public class CassandraFlavor implements AutoCloseable {
     public void querySimple() throws IOException, InterruptedException {
         semaphore = new Semaphore(CONCURRENT_READS);
         var latencies = new ArrayList<Long>();
-        try (var iterator = BuildIndex.dataSource()) {
+        try (var iterator = CohereBench.dataSource()) {
             executeQueriesAndCollectStats(simpleAnnStmt, iterator, latencies);
         }
         printStats("Simple ANN Query", latencies);
@@ -179,7 +179,7 @@ public class CassandraFlavor implements AutoCloseable {
     public void queryRestrictive() throws IOException, InterruptedException {
         semaphore = new Semaphore(CONCURRENT_READS);
         var latencies = new ArrayList<Long>();
-        try (var iterator = BuildIndex.dataSource()) {
+        try (var iterator = CohereBench.dataSource()) {
             executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, latencies);
         }
         printStats("Restrictive ANN Query", latencies);
@@ -188,7 +188,7 @@ public class CassandraFlavor implements AutoCloseable {
     public void queryUnrestrictive() throws IOException, InterruptedException {
         semaphore = new Semaphore(CONCURRENT_READS);
         var latencies = new ArrayList<Long>();
-        try (var iterator = BuildIndex.dataSource()) {
+        try (var iterator = CohereBench.dataSource()) {
             executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, latencies);
         }
         printStats("Unrestrictive ANN Query", latencies);

@@ -23,7 +23,7 @@ import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
-public class BuildIndex {
+public class CohereBench {
     static final Config config = new Config();
     static final int N_SHARDS = 378;
 

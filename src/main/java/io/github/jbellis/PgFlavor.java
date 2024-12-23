@@ -1,7 +1,7 @@
 package io.github.jbellis;
 
 import com.pgvector.PGvector;
-import io.github.jbellis.BuildIndex.DataIterator;
+import io.github.jbellis.CohereBench.DataIterator;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -19,9 +19,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import static io.github.jbellis.BuildIndex.convertToArray;
-import static io.github.jbellis.BuildIndex.log;
-import static io.github.jbellis.BuildIndex.printStats;
+import static io.github.jbellis.CohereBench.convertToArray;
+import static io.github.jbellis.CohereBench.log;
+import static io.github.jbellis.CohereBench.printStats;
 
 public class PgFlavor {
     private static final int CONCURRENT_REQUESTS = 100;
@@ -87,8 +87,8 @@ public class PgFlavor {
         executorService = createExecutor();
 
         int totalRowsInserted = 0;
-        try (var iterator = BuildIndex.dataSource()) {
-            int batchSize = BuildIndex.INITIAL_BATCH_SIZE;
+        try (var iterator = CohereBench.dataSource()) {
+            int batchSize = CohereBench.INITIAL_BATCH_SIZE;
 
             while (totalRowsInserted < 20_000_000) {
                 log("Batch size %d", batchSize);

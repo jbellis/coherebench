@@ -68,7 +68,7 @@
                                 <argument>-Xmx2G</argument>
                                 <argument>-classpath</argument>
                                 <classpath />
-                                <argument>io.github.jbellis.BuildIndex</argument>
+                                <argument>io.github.jbellis.CohereBench</argument>
                             </arguments>
                         </configuration>
                     </execution>
