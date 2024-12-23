@@ -14,23 +14,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ThreadLocalRandom;
 
-import static io.github.jbellis.BuildIndex.INITIAL_BATCH_SIZE;
-import static io.github.jbellis.BuildIndex.SKIP_COUNT;
 import static io.github.jbellis.BuildIndex.convertToCql;
 import static io.github.jbellis.BuildIndex.log;
 import static io.github.jbellis.BuildIndex.printStats;
 
-public class CassandraFlavor {
+public class CassandraFlavor implements AutoCloseable {
     private static final int CONCURRENT_WRITES = 100;
-    private static final int CONCURRENT_READS = 16;
-    private static CqlSession session;
-    private static Semaphore semaphore;
-    private static int totalRowsInserted;
 
-    public static void benchmark() throws IOException, InterruptedException {
-        // set up C* session
+    private final int CONCURRENT_READS = 16;
+    private final CqlSession session;
+    private Semaphore semaphore;
+    private final AtomicInteger totalRowsInserted = new AtomicInteger(0);
+    private final PreparedStatement insertStmt;
+    private final PreparedStatement simpleAnnStmt;
+    private final PreparedStatement restrictiveAnnStmt;
+    private final PreparedStatement unrestrictiveAnnStmt;
+
+    public CassandraFlavor() {
         var configBuilder = DriverConfigLoader.programmaticBuilder()
                 // timeouts go to 11
                 .withDuration(DefaultDriverOption.CONNECTION_INIT_QUERY_TIMEOUT, java.time.Duration.ofSeconds(600))
@@ -46,112 +47,16 @@ public class CassandraFlavor {
         log("Connected to Cassandra.");
 
         var insertCql = "INSERT INTO embeddings_table (id, language, title, url, passage, embedding) VALUES (?, ?, ?, ?, ?, ?)";
-        var insertStmt = session.prepare(insertCql);
+        this.insertStmt = session.prepare(insertCql);
         var simpleAnnCql = "SELECT id, title, url, passage FROM embeddings_table ORDER BY embedding ANN OF ? LIMIT 10";
-        var simpleAnnStmt = session.prepare(simpleAnnCql);
+        this.simpleAnnStmt = session.prepare(simpleAnnCql);
         var restrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'sq' ORDER BY embedding ANN OF ? LIMIT 10";
-        var restrictiveAnnStmt = session.prepare(restrictiveAnnCql);
+        this.restrictiveAnnStmt = session.prepare(restrictiveAnnCql);
         var unrestrictiveAnnCql = "SELECT id, title, url, passage FROM embeddings_table WHERE language = 'en' ORDER BY embedding ANN OF ? LIMIT 10";
-        var unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
-
-        try (var iterator = BuildIndex.dataSource()) {
-            int batchSize = INITIAL_BATCH_SIZE;
-            for (int i = 0; i < SKIP_COUNT; i++) {
-                iterator.next();
-                if (i % 100_000 == 0) {
-                    log("Skipped %d rows", i);
-                }
-            }
-
-            totalRowsInserted = SKIP_COUNT;
-            while (totalRowsInserted < 10_000_000) {
-                log("Batch size %d", batchSize);
-                // Stats collectors
-                var insertLatencies = new ArrayList<Long>();
-                var simpleQueryLatencies = new ArrayList<Long>();
-                var restrictiveQueryLatencies = new ArrayList<Long>();
-                var unrestrictiveQueryLatencies = new ArrayList<Long>();
-
-                // Progress tracking
-                long batchStartTime = System.currentTimeMillis();
-                long lastProgressTime = batchStartTime;
-                AtomicInteger completedRequests = new AtomicInteger(0);
-                
-                // Start progress reporting thread
-                int finalBatchSize = batchSize;
-                Thread progressThread = new Thread(() -> {
-                    while (!Thread.currentThread().isInterrupted()) {
-                        try {
-                            Thread.sleep(5000); // Report every 5 seconds
-                            long now = System.currentTimeMillis();
-                            double elapsedSeconds = (now - batchStartTime) / 1000.0;
-                            int completed = completedRequests.get();
-                            double reqPerSec = completed / elapsedSeconds;
-                            double remainingRequests = finalBatchSize - completed;
-                            double estimatedSecondsRemaining = remainingRequests / reqPerSec;
-                            
-                            log("Progress: %d/%d requests (%.1f req/s), est. %.1f minutes remaining",
-                                completedRequests.get(), finalBatchSize, reqPerSec,
-                                estimatedSecondsRemaining / 60.0);
-                        } catch (InterruptedException e) {
-                            break;
-                        }
-                    }
-                });
-                progressThread.start();
-
-                // Insert rows
-                semaphore = new Semaphore(CONCURRENT_WRITES);
-                for (int i = 0; i < batchSize; i++) {
-                    var rowData = iterator.next();
-                    var language = ThreadLocalRandom.current().nextDouble() < 0.01 ? "sq" : "en";
-                    var bound = insertStmt.bind(rowData._id(), language, rowData.title(), rowData.url(), rowData.text(), convertToCql(rowData.embedding()));
-                    semaphore.acquire();
-                    long start = System.nanoTime();
-                    var asyncResult = session.executeAsync(bound);
-                    asyncResult.whenComplete((rs, th) -> {
-                        long latency = System.nanoTime() - start;
-                        insertLatencies.add(latency);
-                        if (th != null) {
-                            log("Failed to insert row %s: %s", rowData._id(), th);
-                        }
-                        completedRequests.incrementAndGet();
-                        semaphore.release();
-                    });
-                }
-                while (semaphore.availablePermits() < CONCURRENT_WRITES) {
-                    Thread.onSpinWait();
-                }
-                
-                // Stop progress thread
-                progressThread.interrupt();
-                try {
-                    progressThread.join();
-                } catch (InterruptedException e) {
-                    // ignore
-                }
-                
-                printStats("Insert", insertLatencies);
-                totalRowsInserted += batchSize;
-                batchSize = totalRowsInserted; // double every time
-
-                log("Waiting for compactions to finish...");
-                waitForCompactionsToFinish();
-
-                // Perform queries
-                log("Performing queries");
-                semaphore = new Semaphore(CONCURRENT_READS);
-                executeQueriesAndCollectStats(simpleAnnStmt, iterator, simpleQueryLatencies);
-                printStats("Simple Query", simpleQueryLatencies);
-                executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, restrictiveQueryLatencies);
-                printStats("Restrictive Query", restrictiveQueryLatencies);
-                executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
-                printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
-            }
-        }
+        this.unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
     }
 
-    private static void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
+    private void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
         // warmup with 10%
         for (int i = 0; i < 1_000; i++) {
             var rowData = iterator.next();
@@ -190,7 +95,7 @@ public class CassandraFlavor {
         }
     }
 
-    private static void waitForCompactionsToFinish() throws IOException, InterruptedException {
+    private void waitForCompactionsToFinish() throws IOException, InterruptedException {
         // first flush
         String flushCmd = BuildIndex.config.getNodetoolPath() + " flush";
         Process flushProcess = Runtime.getRuntime().exec(flushCmd);
@@ -217,5 +122,80 @@ public class CassandraFlavor {
         String snapshotCmd = BuildIndex.config.getNodetoolPath() + " snapshot coherebench -cf embeddings_table -t cb-" + totalRowsInserted;
         Process snapshotProcess = Runtime.getRuntime().exec(snapshotCmd);
         snapshotProcess.waitFor();
+    }
+
+    public void insert(int numRows, int skipRows) throws IOException, InterruptedException {
+        semaphore = new Semaphore(CONCURRENT_WRITES);
+        try (DataIterator dataIterator = BuildIndex.dataSource()) {
+            // Skip rows if requested
+            for (int i = 0; i < skipRows; i++) {
+                dataIterator.next();
+            }
+
+            // Insert the requested number of rows
+            for (int i = 0; i < numRows; i++) {
+                var rowData = dataIterator.next();
+                var bound = insertStmt.bind(
+                        rowData._id(),
+                        "en",
+                        rowData.title(),
+                        rowData.url(),
+                        rowData.text(),
+                        convertToCql(rowData.embedding()));
+
+                semaphore.acquire();
+                var asyncResult = session.executeAsync(bound);
+                asyncResult.whenComplete((rs, th) -> {
+                    if (th != null) {
+                        log("Failed to insert row %s: %s", rowData._id(), th);
+                    }
+                    totalRowsInserted.incrementAndGet();
+                    semaphore.release();
+                });
+
+                if (i > 0 && i % 100_000 == 0) {
+                    log("Inserted %d rows", i);
+                }
+            }
+        }
+
+        // Wait for all inserts to complete
+        while (semaphore.availablePermits() < CONCURRENT_WRITES) {
+            Thread.onSpinWait();
+        }
+
+        waitForCompactionsToFinish();
+    }
+
+    public void querySimple() throws IOException, InterruptedException {
+        semaphore = new Semaphore(CONCURRENT_READS);
+        var latencies = new ArrayList<Long>();
+        try (var iterator = BuildIndex.dataSource()) {
+            executeQueriesAndCollectStats(simpleAnnStmt, iterator, latencies);
+        }
+        printStats("Simple ANN Query", latencies);
+    }
+
+    public void queryRestrictive() throws IOException, InterruptedException {
+        semaphore = new Semaphore(CONCURRENT_READS);
+        var latencies = new ArrayList<Long>();
+        try (var iterator = BuildIndex.dataSource()) {
+            executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, latencies);
+        }
+        printStats("Restrictive ANN Query", latencies);
+    }
+
+    public void queryUnrestrictive() throws IOException, InterruptedException {
+        semaphore = new Semaphore(CONCURRENT_READS);
+        var latencies = new ArrayList<Long>();
+        try (var iterator = BuildIndex.dataSource()) {
+            executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, latencies);
+        }
+        printStats("Unrestrictive ANN Query", latencies);
+    }
+
+    @Override
+    public void close() {
+        session.close();
     }
 }

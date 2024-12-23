@@ -26,16 +26,39 @@ import java.util.stream.Collectors;
 public class BuildIndex {
     static final Config config = new Config();
     static final int N_SHARDS = 378;
-    static final int SKIP_COUNT = 1048576 * 2;
-    static final int INITIAL_BATCH_SIZE = SKIP_COUNT;
 
-    public static void main(String[] args) throws IOException, InterruptedException {
-        // motherfucking java devs
+    public static void main(String[] args) throws Exception {
         var loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         var rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         rootLogger.setLevel(Level.INFO);
 
-        CassandraFlavor.benchmark();
+        try (CassandraFlavor flavor = new CassandraFlavor()) {
+            if (args.length > 0) {
+                switch (args[0]) {
+                    case "insert":
+                        int numRows = args.length > 1 ? Integer.parseInt(args[1]) : 10_000_000;
+                        int skipRows = args.length > 2 ? Integer.parseInt(args[2]) : 0;
+                        flavor.insert(numRows, skipRows);
+                        break;
+                    case "query":
+                        if (args.length < 2) {
+                            System.out.println("Query type required: simple, restrictive, or unrestrictive");
+                            return;
+                        }
+                        switch (args[1]) {
+                            case "simple" -> flavor.querySimple();
+                            case "restrictive" -> flavor.queryRestrictive();
+                            case "unrestrictive" -> flavor.queryUnrestrictive();
+                            default -> System.out.println("Unknown query type: " + args[1]);
+                        }
+                        break;
+                    default:
+                        System.out.println("Unknown command: " + args[0]);
+                }
+            } else {
+                System.out.println("Usage: BuildIndex insert|query [queryType]");
+            }
+        }
     }
 
     static void printStats(String operationType, List<Long> rawLatencies) {
