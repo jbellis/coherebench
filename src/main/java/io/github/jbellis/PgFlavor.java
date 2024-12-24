@@ -88,7 +88,7 @@ public class PgFlavor {
 
         int totalRowsInserted = 0;
         try (var iterator = CohereBench.dataSource()) {
-            int batchSize = CohereBench.INITIAL_BATCH_SIZE;
+            int batchSize = 2_000_000; // fixme
 
             while (totalRowsInserted < 20_000_000) {
                 log("Batch size %d", batchSize);

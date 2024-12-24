@@ -60,7 +60,7 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <id>buildindex</id>
+                        <id>run</id>
                         <configuration>
                             <arguments>
                                 <argument>--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED</argument>
