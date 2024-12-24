@@ -46,7 +46,7 @@ public class CohereBench {
 
             switch (command) {
                 case "insert" -> {
-                    int numRows = Integer.parseInt(System.getenv().getOrDefault("CB_ROWS", "10000000"));
+                    int numRows = Integer.parseInt(System.getenv().getOrDefault("CB_INSERT_ROWS", "10000000"));
                     int skipRows = Integer.parseInt(System.getenv().getOrDefault("CB_SKIP", "0"));
                     flavor.insert(numRows, skipRows);
                 }

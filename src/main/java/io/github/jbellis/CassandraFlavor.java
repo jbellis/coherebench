@@ -57,8 +57,10 @@ public class CassandraFlavor implements AutoCloseable {
     }
 
     private void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
+        int nRows = Integer.parseInt(System.getenv().getOrDefault("CB_QUERIES", "10_000"));
+        long wStart = System.nanoTime();
         // warmup with 10%
-        for (int i = 0; i < 1_000; i++) {
+        for (int i = 0; i < nRows / 10; i++) {
             var rowData = iterator.next();
             var bound = stmt.bind(convertToCql(rowData.embedding()));
             semaphore.acquire();
@@ -73,9 +75,10 @@ public class CassandraFlavor implements AutoCloseable {
         while (semaphore.availablePermits() < CONCURRENT_READS) {
             Thread.onSpinWait();
         }
+        log("warmup complete in %dms".formatted((System.nanoTime() - wStart) / 1_000_000));
 
         // time the actual workload
-        for (int i = 0; i < 10_000; i++) {
+        for (int i = 0; i < nRows; i++) {
             var rowData = iterator.next();
             var bound = stmt.bind(convertToCql(rowData.embedding()));
             semaphore.acquire();
