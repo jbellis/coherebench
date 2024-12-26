@@ -56,7 +56,7 @@ public class CassandraFlavor implements AutoCloseable {
         this.unrestrictiveAnnStmt = session.prepare(unrestrictiveAnnCql);
     }
 
-    private void executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
+    private long executeQueriesAndCollectStats(PreparedStatement stmt, DataIterator iterator, List<Long> latencies) throws InterruptedException {
         int nRows = Integer.parseInt(System.getenv().getOrDefault("CB_QUERIES", "10_000"));
         long wStart = System.nanoTime();
         // warmup with 10%
@@ -77,6 +77,7 @@ public class CassandraFlavor implements AutoCloseable {
         }
         log("warmup complete in %dms".formatted((System.nanoTime() - wStart) / 1_000_000));
 
+        long benchStartTime = System.nanoTime();
         // time the actual workload
         for (int i = 0; i < nRows; i++) {
             var rowData = iterator.next();
@@ -96,6 +97,7 @@ public class CassandraFlavor implements AutoCloseable {
         while (semaphore.availablePermits() < CONCURRENT_READS) {
             Thread.onSpinWait();
         }
+        return System.nanoTime() - benchStartTime;
     }
 
     private void waitForCompactionsToFinish() throws IOException, InterruptedException {
@@ -174,27 +176,27 @@ public class CassandraFlavor implements AutoCloseable {
         semaphore = new Semaphore(CONCURRENT_READS);
         var latencies = new ArrayList<Long>();
         try (var iterator = CohereBench.dataSource()) {
-            executeQueriesAndCollectStats(simpleAnnStmt, iterator, latencies);
+            long totalTime = executeQueriesAndCollectStats(simpleAnnStmt, iterator, latencies);
+            printStats("Simple ANN Query", latencies, totalTime);
         }
-        printStats("Simple ANN Query", latencies);
     }
 
     public void queryRestrictive() throws IOException, InterruptedException {
         semaphore = new Semaphore(CONCURRENT_READS);
         var latencies = new ArrayList<Long>();
         try (var iterator = CohereBench.dataSource()) {
-            executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, latencies);
+            long totalTime = executeQueriesAndCollectStats(restrictiveAnnStmt, iterator, latencies);
+            printStats("Restrictive ANN Query", latencies, totalTime);
         }
-        printStats("Restrictive ANN Query", latencies);
     }
 
     public void queryUnrestrictive() throws IOException, InterruptedException {
         semaphore = new Semaphore(CONCURRENT_READS);
         var latencies = new ArrayList<Long>();
         try (var iterator = CohereBench.dataSource()) {
-            executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, latencies);
+            long totalTime = executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, latencies);
+            printStats("Unrestrictive ANN Query", latencies, totalTime);
         }
-        printStats("Unrestrictive ANN Query", latencies);
     }
 
     @Override

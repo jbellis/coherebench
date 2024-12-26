@@ -64,24 +64,27 @@ public class CohereBench {
         }
     }
 
-    static void printStats(String operationType, List<Long> rawLatencies) {
+    static void printStats(String operationType, List<Long> rawLatencies, long totalTimeNanos) {
         // not sure why this is necessary
         var latencies = rawLatencies.stream().filter(Objects::nonNull).collect(Collectors.toList());
         if (latencies.isEmpty()) {
             return;
         }
-        long sum = 0;
-        for (var latency : latencies) {
-            sum += latency;
-        }
-        double averageLatency = (sum / (double) latencies.size()) / 1_000_000;
-
+        
+        double totalTimeSeconds = totalTimeNanos / 1_000_000_000.0;
+        double throughput = latencies.size() / totalTimeSeconds;
+        
+        double averageLatency = latencies.stream().mapToDouble(l -> l / 1_000_000.0).average().orElse(0.0);
+        
         Collections.sort(latencies);
         double p50 = latencies.get((int) (latencies.size() * 0.50)) / 1_000_000.0;
         double p90 = latencies.get((int) (latencies.size() * 0.90)) / 1_000_000.0;
         double p99 = latencies.get((int) (latencies.size() * 0.99)) / 1_000_000.0;
 
         System.out.println(operationType + " Statistics:");
+        System.out.printf("    Operations: %d%n", latencies.size());
+        System.out.printf("    Total time (s): %.2f%n", totalTimeSeconds);
+        System.out.printf("    Throughput (ops/s): %.2f%n", throughput);
         System.out.printf("    Average latency (ms): %.2f%n", averageLatency);
         System.out.printf("    50th percentile latency (ms): %.2f%n", p50);
         System.out.printf("    90th percentile latency (ms): %.2f%n", p90);

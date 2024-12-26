@@ -131,10 +131,11 @@ public class PgFlavor {
                 executeQueriesAndCollectStats(unrestrictiveAnnStmt, iterator, unrestrictiveQueryLatencies);
 
                 // Print the stats
-                printStats("Insert", insertLatencies);
-                printStats("Simple Query", simpleQueryLatencies);
-                printStats("Restrictive Query", restrictiveQueryLatencies);
-                printStats("Unrestrictive Query", unrestrictiveQueryLatencies);
+                // fixme totaltime
+                printStats("Insert", insertLatencies, 0);
+                printStats("Simple Query", simpleQueryLatencies, 0);
+                printStats("Restrictive Query", restrictiveQueryLatencies, 0);
+                printStats("Unrestrictive Query", unrestrictiveQueryLatencies, 0);
             }
         }
     }
